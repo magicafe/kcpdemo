@@ -60,27 +60,50 @@ void loop(kcp_data *data)
         usleep(1000);
         ikcp_update(data->kcp, clock());
 
-        memset(buf, 0, BUF_SIZE);
-        int nret = recvfrom(data->sock_fd, buf, BUF_SIZE, MSG_DONTWAIT, (sockaddr *)&data->cli_addr, &sock_len);
-        if (nret < 0)
-        {
-            continue;
-        }
-        counter++;
-        std::cout << "Received data size: " << nret << " at " << counter << std::endl;
-
-        int nkcp = ikcp_input(data->kcp, buf, nret);
-        std::cout << nkcp << std::endl;
-
         while (true)
         {
-            int len = ikcp_recv(data->kcp, buf, nret);
-            if (len < 0)
+            memset(buf, 0, BUF_SIZE);
+            int nret = recvfrom(data->sock_fd, buf, BUF_SIZE, MSG_DONTWAIT, (sockaddr *)&data->cli_addr, &sock_len);
+            if (nret < 0)
             {
                 break;
             }
-            std::cout << buf << std::endl;
+            counter++;
+            std::cout << "Received data size: " << nret << " at " << counter << std::endl;
+
+            int nkcp = ikcp_input(data->kcp, buf, nret);
+            std::cout << nkcp << std::endl;
+            if (nkcp == IKCP_CMD_ACK)
+            {
+                break;
+            }
+
+            uint32_t recv_len = 0;
+
+            while (recv_len < nret)
+            {
+                int32_t msg_len = ikcp_peeksize(data->kcp);
+                std::cout << "Peek size: " << msg_len << std::endl;
+                if (msg_len <= 0)
+                {
+                    break;
+                }
+
+                char *recv_buf = new char[msg_len + 1];
+                int bytes_len = ikcp_recv(data->kcp, recv_buf, msg_len + 1);
+                if (bytes_len > 0)
+                {
+                    recv_len += bytes_len;
+                    recv_buf[msg_len] = '\0';
+                    std::cout << "Receive data: " << recv_buf << "\tLength: " << bytes_len << std::endl;
+                }
+                else
+                {
+                    break;
+                }
+            }
         }
+
         // std::cout << "Receive: " << buf << std::endl;
         // std::string echo(buf);
         // echo += " from server.";

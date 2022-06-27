@@ -50,30 +50,46 @@ void loop(kcp_data *data)
         usleep(1000);
         ikcp_update(data->kcp, clock());
 
-        memset(buf, 0, BUF_SIZE);
-        int nret = recvfrom(data->sock_fd, buf, BUF_SIZE, MSG_DONTWAIT, (sockaddr *)&data->srv_addr, &sock_len);
-        if (nret < 0)
-        {
-            continue;
-        }
-        std::cout << "Received data size: " << nret << std::endl;
-
-        int nkcp = ikcp_input(data->kcp, buf, nret);
-        if (nkcp < 0)
-        {
-            continue;
-        }
-
         while (true)
         {
-            int len = ikcp_recv(data->kcp, buf, nret);
-            if (len < 0)
+            memset(buf, 0, BUF_SIZE);
+            int nret = recvfrom(data->sock_fd, buf, BUF_SIZE, MSG_DONTWAIT, (sockaddr *)&data->srv_addr, &sock_len);
+            if (nret < 0)
             {
                 break;
             }
+            std::cout << "Received data size: " << nret << std::endl;
+
+            int nkcp = ikcp_input(data->kcp, buf, nret);
+            if (nkcp == IKCP_CMD_ACK)
+            {
+                break;
+            }
+
+            uint32_t recv_len = 0;
+            while (recv_len < nret)
+            {
+                int32_t msg_len = ikcp_peeksize(data->kcp);
+                if (msg_len <= 0)
+                {
+                    break;
+                }
+
+                char recv_buf[BUF_SIZE] = "";
+                int bytes_len = ikcp_recv(data->kcp, recv_buf, sizeof(recv_buf));
+                if (bytes_len > 0)
+                {
+                    recv_len += bytes_len;
+                    std::cout << "Receive data: " << recv_buf << "\tLenght: " << bytes_len << std::endl;
+                }
+                else
+                {
+                    break;
+                }
+            }
         }
 
-        std::cout << "Receive: " << buf << std::endl;
+        // std::cout << "Receive: " << buf << std::endl;
         // std::string echo("");
         // counter++;
         // echo = "Hello from client: " + std::to_string(counter);
@@ -97,6 +113,7 @@ int main()
     std::stringstream buffer;
     buffer << t.rdbuf();
     std::string str_data = buffer.str();
+    // std::string str_data("Hello world!Hello world!Hello world!Hello world!Hello world!Hello world!Hello world!Hello world!");
     std::cout << "Data size: " << str_data.length() << std::endl;
     ikcp_send(kcp, str_data.c_str(), str_data.length());
 
